@@ -1,0 +1,7 @@
+{
+  "assetId": "mcp-maxchar-length-policy",
+  "groupId": "96a7526c-e657-42de-919e-0b7bdfab7a80",
+  "version": "0.1.0",
+  "name": "MCP Tool Argument Character Limit Policy",
+  "main": "gcl.yaml"
+}

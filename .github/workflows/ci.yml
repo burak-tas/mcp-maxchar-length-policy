@@ -1,0 +1,54 @@
+name: CI
+
+# Gates every push and pull request:
+#   1. pdk-unit test suite (42 tests: argcheck, config, integration) must pass.
+#   2. Policy must compile to wasm32-wasip1 (the gateway target).
+#
+# rustfmt / clippy run as advisory (continue-on-error) so formatting drift
+# doesn't block while the signal is visible in the checks tab.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: test + wasm build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      # --- Hard gates -------------------------------------------------------
+      - name: Unit tests (pdk-unit entrypoint + argcheck + config helpers)
+        run: cargo test --lib --all-features -- --nocapture
+
+      - name: Build wasm32-wasip1 (release)
+        run: cargo build --release --target wasm32-wasip1
+
+      # --- Advisory checks --------------------------------------------------
+      - name: rustfmt (advisory)
+        run: cargo fmt --all --check
+        continue-on-error: true
+
+      - name: clippy (advisory)
+        run: cargo clippy --all-targets --all-features
+        continue-on-error: true

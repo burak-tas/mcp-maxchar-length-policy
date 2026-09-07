@@ -1,0 +1,15 @@
+---
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: Configuration
+metadata:
+  name: config
+spec:
+  logging:
+    outputs:
+      - type: file
+        config:
+          path: "/tmp/flex-gateway.log"
+    runtimeLogs:
+      logLevel: info
+    accessLogs:
+      enable: true

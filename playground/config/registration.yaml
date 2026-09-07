@@ -1,0 +1,12 @@
+---
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: Configuration
+metadata:
+  name: registration
+spec:
+  registration:
+    anypoint:
+      # Omni Gateway local (unregistered) mode — no Anypoint credentials needed
+      # for local playground testing.  The policy loads from the custom-policies
+      # volume without Anypoint registration.
+      organizationId: ""

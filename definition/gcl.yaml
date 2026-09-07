@@ -1,0 +1,97 @@
+---
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: Extension
+metadata:
+  labels:
+    title: MCP Tool Argument Character Limit Policy
+    description: Enforces per-field and total character limits on MCP tool call arguments, rejecting oversized strings with -32602 Invalid params before any upstream is reached.
+    category: Security
+    metadata/interfaceScope: api,resource
+    metadata/capabilities/injectionPoint: inbound
+    metadata/capabilities/assetTypes: mcp
+
+spec:
+  extends:
+    - name: extension-definition
+      namespace: default
+
+  properties:
+    # ------------------------------------------------------------------
+    # MCP surface
+    # ------------------------------------------------------------------
+    mcpEndpoint:
+      type: string
+      default: /mcp
+      description: Path where the MCP endpoint is served.
+
+    strictMode:
+      type: boolean
+      default: true
+      description: >
+        When true, non-MCP requests are rejected with 404.
+        When false, they fall through to the Flex Gateway upstream.
+
+    # ------------------------------------------------------------------
+    # Per-field character limits
+    # ------------------------------------------------------------------
+    defaultFieldMaxChars:
+      type: integer
+      minimum: 1
+      maximum: 1048576
+      default: 4096
+      description: >
+        Maximum character count applied to every string argument field not
+        covered by a specific entry in fieldLimits. A value of 0 disables
+        the default limit (fieldLimits entries still apply).
+
+    fieldLimits:
+      type: array
+      description: >
+        Optional per-field character limits. Each entry names a top-level
+        argument field and sets its individual cap. When a field appears
+        here the defaultFieldMaxChars is not applied to that field.
+        The check is recursive: if a named field contains a nested object,
+        all strings inside it are also subject to the limit.
+      items:
+        type: object
+        properties:
+          field:
+            type: string
+            description: >
+              Top-level argument field name, e.g. "description".
+              Use "*" to match all fields (equivalent to defaultFieldMaxChars).
+          maxChars:
+            type: integer
+            minimum: 1
+            maximum: 1048576
+            description: Maximum character count for this field.
+        required:
+          - field
+          - maxChars
+
+    # ------------------------------------------------------------------
+    # Total payload limit
+    # ------------------------------------------------------------------
+    maxTotalArgumentChars:
+      type: integer
+      minimum: 1
+      maximum: 10485760
+      description: >
+        Maximum total character count across ALL string values in the
+        arguments object combined. Checked after per-field limits.
+        When unset, no total limit is enforced.
+
+    # ------------------------------------------------------------------
+    # Request-size cap (physical buffer guard — same as Tool Composer)
+    # ------------------------------------------------------------------
+    maxRequestBytes:
+      type: integer
+      minimum: 1024
+      maximum: 104857600
+      default: 1048576
+      description: >
+        Maximum size (bytes) of the incoming MCP request body. A larger
+        body is rejected before parsing. Default 1 MiB, aligned with
+        FLEX_DOWNSTREAM_CONNECTION_BUFFER_LIMIT_BYTES.
+
+  required: []

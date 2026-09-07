@@ -1,0 +1,45 @@
+---
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: ApiInstance
+metadata:
+  name: ingress-http
+spec:
+  address: http://0.0.0.0:8081
+  services:
+    upstream:
+      # Point at any real MCP backend (or httpbin for smoke-testing the pass-through).
+      address: https://www.a2d-ai.com
+      routes:
+        - config:
+            destinationPath: /
+  policies:
+    - policyRef:
+        # Patched by `make run` with the real policy-ref name.
+        name: mcp-maxchar-length-policy-v0-1-impl
+        namespace: default
+      config:
+        mcpEndpoint: "/mcp"
+        strictMode: true
+
+        # ------------------------------------------------------------------
+        # Per-field limits
+        # ------------------------------------------------------------------
+        defaultFieldMaxChars: 2048
+
+        fieldLimits:
+          - field: "description"
+            maxChars: 512
+          - field: "prompt"
+            maxChars: 512
+          - field: "instructions"
+            maxChars: 1024
+
+        # ------------------------------------------------------------------
+        # Total payload cap
+        # ------------------------------------------------------------------
+        maxTotalArgumentChars: 8192
+
+        # ------------------------------------------------------------------
+        # Physical request-body guard
+        # ------------------------------------------------------------------
+        maxRequestBytes: 1048576
