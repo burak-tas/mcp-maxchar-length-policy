@@ -1,0 +1,117 @@
+---
+# example-config.yaml — MCP Tool Argument Character Limit Policy
+#
+# Copy the `config` block into your ApiInstance policy definition.
+# Adjust mcpEndpoint to match the full path your Flex Gateway exposes
+# (e.g. /countrycode/mcp, not just /mcp — see README for details).
+
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: ApiInstance
+metadata:
+  name: my-mcp-api
+spec:
+  address: http://0.0.0.0:8081
+  services:
+    upstream:
+      address: http://my-mcp-backend:3000
+      routes:
+        - config:
+            destinationPath: /
+  policies:
+    - policyRef:
+        name: mcp-maxchar-length-policy-impl
+        namespace: default
+      config:
+        # Full path where your MCP endpoint is served on Flex Gateway.
+        # Must match the complete :path header, not just the suffix.
+        mcpEndpoint: "/mcp"
+
+        # true  → non-MCP paths return 404 (recommended for dedicated MCP APIs)
+        # false → non-MCP paths pass through to the upstream
+        strictMode: true
+
+        # ----------------------------------------------------------------
+        # Default per-field limit
+        # Applied to every string field in tools/call arguments that is
+        # not explicitly listed in fieldLimits below.
+        # ----------------------------------------------------------------
+        defaultFieldMaxChars: 2048   # 2 KB per field — safe default
+
+        # ----------------------------------------------------------------
+        # Per-field overrides
+        # Use these to tighten limits on fields that are particularly
+        # sensitive to prompt injection or token burn.
+        # Use "*" to match any field not covered by an exact name.
+        # ----------------------------------------------------------------
+        fieldLimits:
+          - field: "prompt"
+            maxChars: 512
+          - field: "instructions"
+            maxChars: 512
+          - field: "description"
+            maxChars: 1024
+          - field: "query"
+            maxChars: 1024
+          - field: "message"
+            maxChars: 2048
+
+        # ----------------------------------------------------------------
+        # Total aggregate cap
+        # Sum of all string characters across the entire arguments object.
+        # Enforced after per-field checks.
+        # Remove this line to disable the aggregate cap.
+        # ----------------------------------------------------------------
+        maxTotalArgumentChars: 8192  # 8 KB across all fields combined
+
+        # ----------------------------------------------------------------
+        # Request-body size guard
+        # Rejects the raw HTTP body before JSON parsing when it exceeds
+        # this limit. Aligned with the Flex Gateway buffer default (1 MiB).
+        # ----------------------------------------------------------------
+        maxRequestBytes: 1048576     # 1 MiB
+
+
+# ----------------------------------------------------------------
+# Minimal config (only required overrides, all others use defaults)
+# ----------------------------------------------------------------
+#
+# - policyRef:
+#     name: mcp-maxchar-length-policy-impl
+#     namespace: default
+#   config:
+#     mcpEndpoint: "/mcp"
+#     defaultFieldMaxChars: 4096   # default if omitted
+#     strictMode: true             # default if omitted
+
+
+# ----------------------------------------------------------------
+# Strict single-field scenario (e.g. a search API)
+# ----------------------------------------------------------------
+#
+# - policyRef:
+#     name: mcp-maxchar-length-policy-impl
+#     namespace: default
+#   config:
+#     mcpEndpoint: "/search/mcp"
+#     strictMode: true
+#     defaultFieldMaxChars: 256
+#     fieldLimits:
+#       - field: "query"
+#         maxChars: 200
+#       - field: "filter"
+#         maxChars: 128
+#     maxTotalArgumentChars: 400
+
+
+# ----------------------------------------------------------------
+# Permissive passthrough (non-MCP traffic allowed, high limits)
+# ----------------------------------------------------------------
+#
+# - policyRef:
+#     name: mcp-maxchar-length-policy-impl
+#     namespace: default
+#   config:
+#     mcpEndpoint: "/api/mcp"
+#     strictMode: false
+#     defaultFieldMaxChars: 8192
+#     maxRequestBytes: 5242880   # 5 MiB
