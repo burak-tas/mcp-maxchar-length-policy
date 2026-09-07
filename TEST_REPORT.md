@@ -59,7 +59,7 @@
 |---|---|---|---|
 | TC-01 | `tc01_non_mcp_path_is_404_in_strict_mode` | Non-MCP path + strictMode=true → 404 | PASS |
 | TC-02 | `tc02_non_mcp_path_passes_through_in_non_strict_mode` | Non-MCP path + strictMode=false → Flow::Continue | PASS |
-| TC-03 | `tc03_get_is_405_with_allow_post` | GET → 405, `Allow: POST` header present | PASS |
+| TC-03 | `tc03_get_passes_through` | GET → Flow::Continue (SSE handshake for mcp-support-policy) | PASS |
 | TC-04 | `tc04_wrong_content_type_returns_invalid_request` | Content-Type: text/plain → -32600 | PASS |
 | TC-05 | `tc05_malformed_json_returns_parse_error` | Invalid JSON body → -32700 | PASS |
 | TC-06 | `tc06_wrong_jsonrpc_version_returns_invalid_request` | jsonrpc: "1.0" → -32600 | PASS |

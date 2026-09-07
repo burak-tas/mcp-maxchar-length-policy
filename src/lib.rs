@@ -80,13 +80,10 @@ async fn request_filter(
         return Flow::Continue(());
     }
 
-    // Only POST carries MCP JSON-RPC messages.
+    // Only POST carries MCP JSON-RPC messages — GET is used for SSE by
+    // mcp-support-policy and must pass through unchanged.
     if method != "POST" {
-        return send_raw(
-            405,
-            &[(CONTENT_TYPE_HEADER, APPLICATION_JSON), ("allow", "POST")],
-            br#"{"error":"Use POST for MCP requests"}"#,
-        );
+        return Flow::Continue(());
     }
 
     // Content-Type must be application/json for POST.

@@ -83,15 +83,14 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // TC-03: transport — GET is 405 with Allow: POST
+    // TC-03: transport — GET passes through (SSE handshake used by mcp-support-policy)
     // -----------------------------------------------------------------------
     #[test]
-    fn tc03_get_is_405_with_allow_post() {
-        use pdk_unit::UnitHttpMessage;
+    fn tc03_get_passes_through() {
         let response =
             tester(&default_config()).request(UnitHttpRequest::get().with_path(ENDPOINT));
-        assert_eq!(response.status_code(), 405);
-        assert_eq!(response.header("allow"), Some("POST"));
+        // Flow::Continue → pdk-unit returns 200 (upstream stub default).
+        assert_eq!(response.status_code(), 200);
     }
 
     // -----------------------------------------------------------------------
