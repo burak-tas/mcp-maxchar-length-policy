@@ -4,3 +4,4 @@ Cargo.lock
 .DS_Store
 *.wasm
 .cargo/
+playground/config/custom-policies/

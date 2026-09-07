@@ -97,3 +97,80 @@ The following classes of bugs found in the composer policy were designed out fro
 | #8 Tool execution failures as INTERNAL_ERROR | CallToolResult semantics correct from day 0 (pass-through, not terminating) |
 | #9/#16 No payload-size limits | `maxRequestBytes` enforced before parsing from day 0 |
 | #17/#18 No CI | GitHub Actions CI added from day 0 |
+
+---
+
+## Live deployment tests — Schema Validation gap demonstration
+
+**Environment:** Flex Gateway 1.12.0 (Docker, local playground)  
+**Backend:** Node.js mock MCP server (serves `searchDocuments` and `createRecord`)  
+**Policy config:** `defaultFieldMaxChars: 2048`, `fieldLimits: [{field: "description", maxChars: 512}]`  
+**Date:** 2026-09-07
+
+### Why Schema Validation does not close this gap
+
+MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` — but only when the tool developer explicitly includes it. The mock tools used here intentionally omit `maxLength` on all fields, as most real-world tools do. The Flex Gateway Schema Validation policy would pass every request below; this policy rejects them.
+
+| DT | Test | Schema Validation result | This policy result |
+|---|---|---|---|
+| DT-01 | Short query (12 chars) via `searchDocuments` | PASS (no constraint) | PASS |
+| DT-02 | Oversized query (2049 chars, default limit 2048) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-03 | `description` exactly 512 chars | PASS | PASS |
+| DT-04 | `description` 513 chars (field-specific limit 512) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-05 | Nested `metadata.author` 2049 chars (recursive check) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-06 | Unicode query `"São Paulo"` (9 chars, 11 UTF-8 bytes) | PASS | PASS (chars, not bytes) |
+
+### DT-02 — the primary gap case
+
+Request:
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"searchDocuments","arguments":{"query":"AAAA…(2049 chars)"}}}
+```
+
+Schema Validation: passes — `inputSchema` declares `query: {type: string}` with no `maxLength`.
+
+This policy response:
+```json
+{"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"argument character limit exceeded — argument field 'query' has 2049 character(s), which exceeds the limit of 2048"}}
+```
+
+### DT-04 — field-specific limit gap
+
+Request:
+```json
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"createRecord","arguments":{"title":"My Title","description":"CCCC…(513 chars)"}}}
+```
+
+Schema Validation: passes — `description: {type: string}` has no `maxLength`.
+
+This policy response:
+```json
+{"jsonrpc":"2.0","id":4,"error":{"code":-32602,"message":"argument character limit exceeded — argument field 'description' has 513 character(s), which exceeds the limit of 512"}}
+```
+
+### DT-05 — recursive nested-object gap
+
+Request:
+```json
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"createRecord","arguments":{"title":"Test","metadata":{"author":"DDDD…(2049 chars)"}}}}
+```
+
+Schema Validation: passes — `metadata: {type: object}` has no property-level `maxLength` constraints.
+
+This policy response:
+```json
+{"jsonrpc":"2.0","id":5,"error":{"code":-32602,"message":"argument character limit exceeded — argument field 'metadata.author' has 2049 character(s), which exceeds the limit of 2048"}}
+```
+
+Error path `metadata.author` confirms the recursive tree-walk fired at depth 2.
+
+### Summary
+
+| Scenario | Schema Validation alone | This policy |
+|---|---|---|
+| Tool has `maxLength` in schema | Enforces it | Enforces the lower of the two limits |
+| Tool has **no** `maxLength` | **No enforcement — any string passes** | Enforces `fieldLimits` / `defaultFieldMaxChars` |
+| Nested object strings | Never checked (Schema Validation is top-level only) | Recursively enforced at any depth |
+| Total aggregate cap across all fields | Not supported | `maxTotalArgumentChars` enforces it |
+
+This policy provides **uniform, unconditional enforcement** regardless of whether individual tool schemas declare `maxLength` — closing the gap that Schema Validation leaves open for every tool that omits it.

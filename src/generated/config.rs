@@ -1,5 +1,4 @@
 use serde::Deserialize;
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct FieldLimits0Config {
     #[serde(alias = "field")]
@@ -7,7 +6,6 @@ pub struct FieldLimits0Config {
     #[serde(alias = "maxChars")]
     pub max_chars: i64,
 }
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct Config {
     #[serde(alias = "defaultFieldMaxChars")]
@@ -23,17 +21,8 @@ pub struct Config {
     #[serde(alias = "strictMode")]
     pub strict_mode: Option<bool>,
 }
-
 #[pdk::hl::entrypoint_flex]
 fn init(abi: &dyn pdk::flex_abi::api::FlexAbi) -> Result<(), anyhow::Error> {
-    let _config: Config = serde_json::from_slice(abi.get_configuration())
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "Failed to parse configuration '{}'. Cause: {}",
-                String::from_utf8_lossy(abi.get_configuration()),
-                err
-            )
-        })?;
     abi.setup()?;
     Ok(())
 }

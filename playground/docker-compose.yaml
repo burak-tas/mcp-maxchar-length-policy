@@ -9,13 +9,48 @@ services:
     environment:
       LOG_LEVEL: debug
       FLEX_LOG_LEVEL: 7
-      # Physical ceiling for the atomically-buffered request/response (default
-      # 1 MiB). Keep at or above the policy's maxRequestBytes.
       FLEX_DOWNSTREAM_CONNECTION_BUFFER_LIMIT_BYTES: "1048576"
     ports:
       - 8081:8081
     volumes:
       - ./config:/usr/local/share/mulesoft/flex-gateway/conf.d/
-  backend:
-    image: kennethreitz/httpbin
+    depends_on:
+      - mcp-backend
+
+  mcp-backend:
+    image: node:22-alpine
     platform: linux/amd64
+    ports:
+      - 3000:3000
+    command: >
+      sh -c "node -e \"
+      const http = require('http');
+      const server = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', d => body += d);
+        req.on('end', () => {
+          let request;
+          try { request = JSON.parse(body); } catch(e) {
+            res.writeHead(400, {'Content-Type': 'application/json'});
+            return res.end(JSON.stringify({jsonrpc:'2.0',id:null,error:{code:-32700,message:'Parse error'}}));
+          }
+          res.writeHead(200, {'Content-Type': 'application/json'});
+          const id = request.id !== undefined ? request.id : null;
+          const method = request.method;
+          if (method === 'initialize') {
+            res.end(JSON.stringify({jsonrpc:'2.0',id,result:{protocolVersion:'2025-03-26',capabilities:{},serverInfo:{name:'mock-mcp',version:'0.1.0'}}}));
+          } else if (method === 'tools/list') {
+            res.end(JSON.stringify({jsonrpc:'2.0',id,result:{tools:[
+              {name:'searchDocuments',description:'Search docs',inputSchema:{type:'object',properties:{query:{type:'string'}},required:['query']}},
+              {name:'createRecord',description:'Create record',inputSchema:{type:'object',properties:{title:{type:'string'},description:{type:'string'},metadata:{type:'object'}},required:['title']}}
+            ]}}));
+          } else if (method === 'tools/call') {
+            const toolName = (request.params && request.params.name) || 'unknown';
+            res.end(JSON.stringify({jsonrpc:'2.0',id,result:{content:[{type:'text',text:'Mock result from ' + toolName}],isError:false}}));
+          } else {
+            res.end(JSON.stringify({jsonrpc:'2.0',id,error:{code:-32601,message:'Method not found'}}));
+          }
+        });
+      });
+      server.listen(3000, () => console.log('Mock MCP backend listening on :3000'));
+      \""
