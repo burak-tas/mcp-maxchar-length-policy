@@ -35,7 +35,7 @@ MCP Client
 
 ## Schema Validation vs MCP Tool Argument Character Limit - Test Results
 
-MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` — but only when the tool developer explicitly includes it. The mock tools used here intentionally omit `maxLength` on all fields, as most real-world tools do. The Flex Gateway Schema Validation policy would pass every request below; this policy rejects them.
+MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` — but only when the tool developer explicitly includes it. The mock tools used here intentionally omit `maxLength` on all fields, as most real-world tools do. The Omni Gateway Schema Validation policy would pass every request below; this policy rejects them.
 
 | DT | Test | Schema Validation result | This policy result |
 |---|---|---|---|
@@ -51,15 +51,15 @@ MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` �
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `mcpEndpoint` | string | `/mcp` | Full path where the MCP endpoint is served on the Flex Gateway (e.g. `/countrycode/mcp`). Must match the complete URL path — not just the suffix. |
+| `mcpEndpoint` | string | `/mcp` | Full path where the MCP endpoint is served on the Omni Gateway (e.g. `/countrycode/mcp`). Must match the complete URL path — not just the suffix. |
 | `strictMode` | boolean | `true` | `true`: non-MCP paths return 404; `false`: fall through |
 | `defaultFieldMaxChars` | integer | `4096` | Character limit applied to every string field not covered by `fieldLimits` |
 | `fieldLimits` | array | `[]` | Per-field overrides (see below) |
 | `maxTotalArgumentChars` | integer | *(unset)* | Maximum combined character count across all string values |
 | `maxRequestBytes` | integer | `1048576` | Maximum raw request body size (bytes). Enforced before parsing. |
 
-> **Important — `mcpEndpoint` must be the full Flex Gateway path.**
-> The policy matches requests using `starts_with(mcpEndpoint)` against the full `:path` header that Flex Gateway sees. If your API instance is mounted at `/countrycode/mcp`, set `mcpEndpoint: "/countrycode/mcp"` — setting it to just `"/mcp"` will not match and the policy will silently pass all requests through (when `strictMode: false`).
+> **Important — `mcpEndpoint` must be the full Omni Gateway path.**
+> The policy matches requests using `starts_with(mcpEndpoint)` against the full `:path` header that Omni Gateway sees. If your API instance is mounted at `/countrycode/mcp`, set `mcpEndpoint: "/countrycode/mcp"` — setting it to just `"/mcp"` will not match and the policy will silently pass all requests through (when `strictMode: false`).
 
 ### `fieldLimits` entries
 
@@ -80,7 +80,7 @@ Each entry is an object with:
 
 ```yaml
 config:
-  # Use the full path exposed by Flex Gateway, not just the suffix.
+  # Use the full path exposed by Omni Gateway, not just the suffix.
   # Example: if your API is mounted at /countrycode/mcp, set this to /countrycode/mcp.
   mcpEndpoint: "/mcp"
   strictMode: true
@@ -204,5 +204,5 @@ Then test against `http://localhost:8081/mcp`.
 ## Versioning and minimum runtime
 
 - **Policy version**: `0.1.0`
-- **Minimum Omni/Flex Gateway**: `1.12.0` (requires `flex_enable_stop_iteration` ABI for atomic header+body buffering)
+- **Minimum Omni Gateway**: `1.12.0` (requires `flex_enable_stop_iteration` ABI for atomic header+body buffering)
 - **PDK version**: `1.10.0`
