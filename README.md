@@ -51,15 +51,22 @@ MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` �
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `mcpEndpoint` | string | `/mcp` | Full path where the MCP endpoint is served on the Omni Gateway (e.g. `/countrycode/mcp`). Must match the complete URL path — not just the suffix. |
+| `mcpEndpoint` | string | `/mcp` | Path prefix used to identify MCP requests. See note below — the correct value depends on the API instance type. |
 | `strictMode` | boolean | `true` | `true`: non-MCP paths return 404; `false`: fall through |
 | `defaultFieldMaxChars` | integer | `4096` | Character limit applied to every string field not covered by `fieldLimits` |
 | `fieldLimits` | array | `[]` | Per-field overrides (see below) |
 | `maxTotalArgumentChars` | integer | *(unset)* | Maximum combined character count across all string values |
 | `maxRequestBytes` | integer | `1048576` | Maximum raw request body size (bytes). Enforced before parsing. |
 
-> **Important — `mcpEndpoint` must be the full Omni Gateway path.**
-> The policy matches requests using `starts_with(mcpEndpoint)` against the full `:path` header that Omni Gateway sees. If your API instance is mounted at `/countrycode/mcp`, set `mcpEndpoint: "/countrycode/mcp"` — setting it to just `"/mcp"` will not match and the policy will silently pass all requests through (when `strictMode: false`).
+> **Important — `mcpEndpoint` depends on the API instance type.**
+>
+> | Instance type | What the policy sees as `:path` | Correct `mcpEndpoint` |
+> |---|---|---|
+> | **MCP Bridge** (`mcp-bridge-*`) | Gateway strips the deployment prefix — policy sees `/` or just the sub-path | `"/"` |
+> | **Regular Flex Gateway** | Full gateway path, e.g. `/countrycode/mcp` | `"/countrycode/mcp"` |
+>
+> For MCP Bridge instances, set `mcpEndpoint: "/"` — the gateway has already routed the request to this API instance, so the policy sees a path relative to the instance root, not the full public URL path.
+> For regular Flex Gateway instances, use the complete path your API is mounted at. Setting it to just a suffix (e.g. `"/mcp"` when the path is `/countrycode/mcp`) will not match, and the policy will silently pass all requests through when `strictMode: false`.
 
 ### `fieldLimits` entries
 
@@ -75,6 +82,9 @@ Each entry is an object with:
 2. Wildcard `"*"` entry in `fieldLimits`
 3. `defaultFieldMaxChars`
 4. No limit
+
+> **Note — `field` must be the top-level argument key, not a nested key.**
+> The limit for a string at `arguments.body.ISOCode` is looked up by the top-level key `"body"`, not `"ISOCode"`. The error message reports the full dotted path (`body.ISOCode`), but the config must reference the top-level key. Use `field: "body"` to limit everything inside the `body` object.
 
 ## Example configuration
 

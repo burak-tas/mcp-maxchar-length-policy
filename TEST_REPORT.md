@@ -64,7 +64,7 @@
 | TC-05 | `tc05_malformed_json_returns_parse_error` | Invalid JSON body → -32700 | PASS |
 | TC-06 | `tc06_wrong_jsonrpc_version_returns_invalid_request` | jsonrpc: "1.0" → -32600 | PASS |
 | TC-07 | `tc07_missing_method_returns_invalid_request` | Missing method field → -32600 | PASS |
-| TC-08 | `tc08_unsupported_protocol_version_header_is_400` | MCP-Protocol-Version: 1999-01-01 on tools/list → 400, -32600 | PASS |
+| TC-08 | `tc08_unknown_protocol_version_passes_through` | Any MCP-Protocol-Version passes through — version negotiation is mcp-support-policy's job | PASS |
 | TC-09 | `tc09_initialize_passes_through_downstream` | `initialize` with no char limits → Flow::Continue | PASS |
 | TC-09b | `tc09b_tools_list_passes_through_downstream` | `tools/list` → Flow::Continue | PASS |
 | TC-10 | `tc10_tools_call_within_default_limit_passes_through` | tools/call with short arg → Flow::Continue | PASS |
