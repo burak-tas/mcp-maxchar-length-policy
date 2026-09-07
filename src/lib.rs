@@ -60,16 +60,13 @@ async fn request_filter(
     request: RequestState,
     policy: Rc<PolicyConfig>,
 ) -> Flow<()> {
-    // Buffer headers + body atomically so a synthetic Flow::Break (our reject
-    // path) cannot lose a race to an upstream response (#15).
-    let state = request.into_headers_body_state().await;
-    let handler = state.handler();
-
-    let path = handler.header(":path").unwrap_or_else(|| "/".to_string());
-    let method = handler
-        .header(":method")
-        .unwrap_or_default()
-        .to_ascii_uppercase();
+    // Read path and method via into_headers_state() — this does NOT enable
+    // stop_iteration, so GET/SSE requests are never paused by Envoy.
+    // into_headers_body_state() (which does enable stop_iteration) is only
+    // called for POST requests that actually carry a JSON-RPC body.
+    let headers_state = request.into_headers_state().await;
+    let path = headers_state.path();
+    let method = headers_state.method().to_ascii_uppercase();
 
     // Strict-mode: non-MCP paths fall through or 404.
     let bare = path.split_once('?').map(|(p, _)| p).unwrap_or(&path);
@@ -80,11 +77,16 @@ async fn request_filter(
         return Flow::Continue(());
     }
 
-    // Only POST carries MCP JSON-RPC messages — GET is used for SSE by
-    // mcp-support-policy and must pass through unchanged.
+    // Only POST carries MCP JSON-RPC messages — GET/DELETE/etc. (SSE handshake,
+    // session teardown) must pass through untouched to mcp-support-policy.
     if method != "POST" {
         return Flow::Continue(());
     }
+
+    // Now safe to buffer: POST only. Atomic header+body buffering ensures our
+    // Flow::Break response cannot race an upstream response (#15).
+    let state = headers_state.into_headers_body_state().await;
+    let handler = state.handler();
 
     // Content-Type must be application/json for POST.
     let content_type = handler.header("content-type").unwrap_or_default();
