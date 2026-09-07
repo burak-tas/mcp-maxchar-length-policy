@@ -44,14 +44,6 @@ const CONTENT_TYPE_HEADER: &str = "content-type";
 const CONTENT_LENGTH_HEADER: &str = "content-length";
 const APPLICATION_JSON: &str = "application/json";
 
-// MCP protocol versions this policy understands.
-const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
-const DEFAULT_NEGOTIATED_VERSION: &str = "2025-03-26";
-
-fn is_supported_version(version: &str) -> bool {
-    SUPPORTED_PROTOCOL_VERSIONS.contains(&version)
-}
-
 // ---------------------------------------------------------------------------
 // Request filter
 // ---------------------------------------------------------------------------
@@ -102,10 +94,6 @@ async fn request_filter(
         );
     }
 
-    // MCP-Protocol-Version header: validated here so transport violations are
-    // caught before touching the body.  `initialize` is exempt.
-    let requested_protocol_version: Option<String> = handler.header("mcp-protocol-version");
-
     let body = if state.contains_body() {
         handler.body()
     } else {
@@ -154,28 +142,6 @@ async fn request_filter(
             );
         }
     };
-
-    // MCP-Protocol-Version header check (exempt for initialize).
-    if method_name != "initialize" {
-        if let Some(pv) = requested_protocol_version.as_deref() {
-            if !is_supported_version(pv) {
-                return send_json_rpc(
-                    400,
-                    &error_response(
-                        rpc.id.clone(),
-                        INVALID_REQUEST,
-                        format!("unsupported MCP-Protocol-Version '{pv}'"),
-                    ),
-                );
-            }
-        } else {
-            logger::debug!(
-                "[{}] no MCP-Protocol-Version header; assuming {}",
-                POLICY_NAME,
-                DEFAULT_NEGOTIATED_VERSION
-            );
-        }
-    }
 
     // Notifications (id-less): pass through — they carry no arguments.
     if rpc.is_notification() {

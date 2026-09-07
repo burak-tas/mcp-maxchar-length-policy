@@ -4,7 +4,7 @@
 //! This policy is a *pass-through enforcer* — it enforces character limits on
 //! tools/call arguments and then does Flow::Continue for valid requests.  The
 //! tests therefore assert:
-//!   - transport guards (405, 404, Content-Type, Accept, Origin, protocol version)
+//!   - transport guards (404, Content-Type, GET pass-through)
 //!   - envelope validation (-32600, -32700, -32601)
 //!   - argument character-limit enforcement (-32602 for violations)
 //!   - pass-through: a valid tools/call with arguments under every limit
@@ -147,19 +147,21 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // TC-08: MCP-Protocol-Version — unsupported version returns 400
+    // TC-08: MCP-Protocol-Version — any version passes through (not our concern)
     // -----------------------------------------------------------------------
     #[test]
-    fn tc08_unsupported_protocol_version_header_is_400() {
+    fn tc08_unknown_protocol_version_passes_through() {
+        // This policy does not validate MCP-Protocol-Version — that is the
+        // mcp-support-policy's responsibility. Unknown versions must pass through.
         let response = tester(&default_config()).request(
             UnitHttpRequest::post()
                 .with_path(ENDPOINT)
                 .with_header("content-type", "application/json")
-                .with_header("mcp-protocol-version", "1999-01-01")
+                .with_header("mcp-protocol-version", "2025-11-25")
                 .with_body(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}).to_string()),
         );
-        assert_eq!(response.status_code(), 400);
-        assert_eq!(body_json(&response)["error"]["code"], -32600);
+        // Flow::Continue → pdk-unit 200 (upstream stub default).
+        assert_eq!(response.status_code(), 200);
     }
 
     // -----------------------------------------------------------------------
