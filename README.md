@@ -33,16 +33,33 @@ MCP Client
 [Your MCP Backend]
 ```
 
+## Schema Validation vs MCP Tool Argument Character Limit - Test Results
+
+MCP's built-in JSON Schema Validation policy enforces `inputSchema.maxLength` — but only when the tool developer explicitly includes it. The mock tools used here intentionally omit `maxLength` on all fields, as most real-world tools do. The Flex Gateway Schema Validation policy would pass every request below; this policy rejects them.
+
+| DT | Test | Schema Validation result | This policy result |
+|---|---|---|---|
+| DT-01 | Short query (12 chars) via `searchDocuments` | PASS (no constraint) | PASS |
+| DT-02 | Oversized query (2049 chars, default limit 2048) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-03 | `description` exactly 512 chars | PASS | PASS |
+| DT-04 | `description` 513 chars (field-specific limit 512) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-05 | Nested `metadata.author` 2049 chars (recursive check) | **PASS — gap exposed** | **REJECT -32602** |
+| DT-06 | Unicode query `"São Paulo"` (9 chars, 11 UTF-8 bytes) | PASS | PASS (chars, not bytes) |
+
+
 ## Configuration reference
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `mcpEndpoint` | string | `/mcp` | Path where the MCP endpoint is served |
+| `mcpEndpoint` | string | `/mcp` | Full path where the MCP endpoint is served on the Flex Gateway (e.g. `/countrycode/mcp`). Must match the complete URL path — not just the suffix. |
 | `strictMode` | boolean | `true` | `true`: non-MCP paths return 404; `false`: fall through |
 | `defaultFieldMaxChars` | integer | `4096` | Character limit applied to every string field not covered by `fieldLimits` |
 | `fieldLimits` | array | `[]` | Per-field overrides (see below) |
 | `maxTotalArgumentChars` | integer | *(unset)* | Maximum combined character count across all string values |
 | `maxRequestBytes` | integer | `1048576` | Maximum raw request body size (bytes). Enforced before parsing. |
+
+> **Important — `mcpEndpoint` must be the full Flex Gateway path.**
+> The policy matches requests using `starts_with(mcpEndpoint)` against the full `:path` header that Flex Gateway sees. If your API instance is mounted at `/countrycode/mcp`, set `mcpEndpoint: "/countrycode/mcp"` — setting it to just `"/mcp"` will not match and the policy will silently pass all requests through (when `strictMode: false`).
 
 ### `fieldLimits` entries
 
@@ -63,6 +80,8 @@ Each entry is an object with:
 
 ```yaml
 config:
+  # Use the full path exposed by Flex Gateway, not just the suffix.
+  # Example: if your API is mounted at /countrycode/mcp, set this to /countrycode/mcp.
   mcpEndpoint: "/mcp"
   strictMode: true
 
