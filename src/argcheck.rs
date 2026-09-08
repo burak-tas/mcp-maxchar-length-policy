@@ -17,11 +17,15 @@ use crate::config::PolicyConfig;
 /// Result of the character-limit check.  `Ok(())` = all limits satisfied.
 /// `Err(msg)` = first violated limit; the message is safe to surface to the
 /// MCP client (no caller-supplied content).
+/// Maximum recursion depth for the argument tree walk.  A WASM stack is
+/// limited; 32 levels is far more than any real MCP tool schema needs.
+const MAX_DEPTH: usize = 32;
+
 pub fn check_argument_chars(args: &Value, config: &PolicyConfig) -> Result<(), String> {
     // Walk every string in the arguments tree.
     // Per-field limits apply to the top-level key of the field that exceeds the
     // limit; we carry the top-level key name down through the recursion.
-    check_value(args, args, "<root>", None, config)?;
+    check_value(args, args, "<root>", None, config, 0)?;
 
     // Total character count check.
     if let Some(max_total) = config.max_total_argument_chars {
@@ -46,7 +50,13 @@ fn check_value(
     path: &str,
     top_key: Option<&str>,
     config: &PolicyConfig,
+    depth: usize,
 ) -> Result<(), String> {
+    if depth > MAX_DEPTH {
+        return Err(format!(
+            "argument nesting at '{path}' exceeds maximum depth of {MAX_DEPTH}"
+        ));
+    }
     match value {
         Value::String(s) => {
             let len = s.chars().count();
@@ -69,13 +79,13 @@ fn check_value(
                 } else {
                     top_key
                 };
-                check_value(root, child, &child_path, child_top_key, config)?;
+                check_value(root, child, &child_path, child_top_key, config, depth + 1)?;
             }
         }
         Value::Array(items) => {
             for (i, item) in items.iter().enumerate() {
                 let item_path = format!("{path}[{i}]");
-                check_value(root, item, &item_path, top_key, config)?;
+                check_value(root, item, &item_path, top_key, config, depth + 1)?;
             }
         }
         // Non-string scalars and null impose no character limit.

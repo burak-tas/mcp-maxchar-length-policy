@@ -469,18 +469,94 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // TC-20: notifications pass through without limit checks
+    // TC-20: non-tools/call notifications pass through without limit checks
     // -----------------------------------------------------------------------
     #[test]
     fn tc20_notification_passes_through_without_checks() {
-        // A notification (no id) for tools/call would technically be malformed,
-        // but the policy must not crash: it detects the notification flag before
-        // hitting the argument check and passes through.
         let response = post_rpc(
             &default_config(),
             json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
         );
         // Flow::Continue → pdk-unit 200.
         assert_eq!(response.status_code(), 200);
+    }
+
+    // -----------------------------------------------------------------------
+    // TC-21: id-less tools/call still enforces character limits (issue #1)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn tc21_idless_tools_call_still_enforces_limits() {
+        let cfg = json!({
+            "mcpEndpoint": ENDPOINT,
+            "strictMode": true,
+            "defaultFieldMaxChars": 5
+        })
+        .to_string();
+        // No "id" field — is_notification() returns true, but tools/call must
+        // still be checked before the notification short-circuit.
+        let response = post_rpc(
+            &cfg,
+            json!({"jsonrpc":"2.0","method":"tools/call","params":{"name":"myTool","arguments":{"x":"toolong"}}}),
+        );
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(body_json(&response)["error"]["code"], -32602);
+    }
+
+    // -----------------------------------------------------------------------
+    // TC-22: path-segment boundary — /mcp must not match /mcp2 (issue #2)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn tc22_path_prefix_requires_segment_boundary() {
+        // /mcp2 must NOT match mcpEndpoint="/mcp" — it must fall through or 404.
+        let response = tester(&default_config()).request(
+            UnitHttpRequest::post()
+                .with_path("/mcp2")
+                .with_header("content-type", "application/json")
+                .with_body(json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t","arguments":{"x":"y"}}}).to_string()),
+        );
+        // strictMode=true → 404 (not matched as MCP endpoint).
+        assert_eq!(response.status_code(), 404);
+    }
+
+    #[test]
+    fn tc22b_path_with_trailing_slash_matches() {
+        // /mcp/ must match mcpEndpoint="/mcp".
+        let response = tester(&default_config()).request(
+            UnitHttpRequest::post()
+                .with_path("/mcp/")
+                .with_header("content-type", "application/json")
+                .with_body(json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t","arguments":{"x":"y"}}}).to_string()),
+        );
+        // Matched → goes through content-type check and beyond → 200 (pass-through).
+        assert_eq!(response.status_code(), 200);
+    }
+
+    // -----------------------------------------------------------------------
+    // TC-23: nesting depth guard returns -32602 at MAX_DEPTH+1 (issue #3)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn tc23_deeply_nested_args_rejected() {
+        let cfg = json!({
+            "mcpEndpoint": ENDPOINT,
+            "strictMode": true,
+            "defaultFieldMaxChars": 4096
+        })
+        .to_string();
+        // Build a 33-level deep object: {a: {a: {a: ... "leaf"}}}
+        let mut nested: Value = json!("leaf");
+        for _ in 0..33 {
+            nested = json!({"a": nested});
+        }
+        let response = post_rpc(
+            &cfg,
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t","arguments":{"root": nested}}}),
+        );
+        assert_eq!(response.status_code(), 200);
+        assert_eq!(body_json(&response)["error"]["code"], -32602);
+        let msg = body_json(&response)["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        assert!(msg.contains("depth") || msg.contains("nesting"), "got: {msg}");
     }
 }

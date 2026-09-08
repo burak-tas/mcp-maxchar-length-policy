@@ -68,7 +68,17 @@ async fn request_filter(
 
     // Strict-mode: non-MCP paths fall through or 404.
     let bare = path.split_once('?').map(|(p, _)| p).unwrap_or(&path);
-    if !bare.starts_with(&policy.mcp_endpoint) {
+    // Match on a path-segment boundary: /mcp must not match /mcp2 or /mcphandler.
+    // After stripping the prefix, the next char must be '/', '?' or end-of-string.
+    let matched = if policy.mcp_endpoint == "/" {
+        true
+    } else {
+        bare.starts_with(policy.mcp_endpoint.as_str()) && {
+            let rest = &bare[policy.mcp_endpoint.len()..];
+            rest.is_empty() || rest.starts_with('/') || rest.starts_with('?')
+        }
+    };
+    if !matched {
         if policy.strict_mode {
             return send_error(404, "Not Found");
         }
@@ -143,19 +153,20 @@ async fn request_filter(
         }
     };
 
-    // Notifications (id-less): pass through — they carry no arguments.
-    if rpc.is_notification() {
-        return Flow::Continue(());
-    }
-
-    // For tools/call: enforce character limits, then continue.
-    // For everything else: continue immediately.
+    // tools/call always runs the argument checks, even when id is absent.
+    // The notification short-circuit below must come AFTER this block so that
+    // an id-less tools/call is not silently passed through unchecked.
     if method_name == "tools/call" {
         if let Err(err_msg) =
             check_tools_call_args(rpc.id.clone(), rpc.params.as_ref(), &policy)
         {
             return err_msg;
         }
+    }
+
+    // Notifications (id-less, non-tools/call): pass through unchanged.
+    if rpc.is_notification() {
+        return Flow::Continue(());
     }
 
     // All checks passed — let the request proceed downstream.

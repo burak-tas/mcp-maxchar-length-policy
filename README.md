@@ -161,11 +161,11 @@ This policy is designed to be chained **before** the MCP Tool Composer Policy in
 ```yaml
 policies:
   - policyRef:
-      name: mcp-maxchar-length-policy-v0-1-impl
+      name: mcp-maxchar-length-policy-impl
       namespace: default
     config: { ... }
   - policyRef:
-      name: mcp-tool-composer-policy-v0-1-impl
+      name: mcp-tool-composer-policy-impl
       namespace: default
     config: { ... }
 ```
